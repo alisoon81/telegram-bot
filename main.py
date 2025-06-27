@@ -3,9 +3,12 @@ from telegram.ext import ApplicationBuilder, MessageHandler, filters, CallbackQu
 from telegram.constants import ParseMode
 from flask import Flask
 from threading import Thread
+import nest_asyncio
 import asyncio
 import os
 import json
+
+nest_asyncio.apply()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
@@ -77,9 +80,11 @@ flask_app = Flask('')
 def home():
     return "ربات فعاله 🚀"
 
-def run_flask():
+def run():
     flask_app.run(host="0.0.0.0", port=8080)
 
 if __name__ == "__main__":
-    Thread(target=run_flask).start()
-    asyncio.get_event_loop().run_until_complete(start_bot())
+    Thread(target=run).start()
+    loop = asyncio.get_event_loop()
+    loop.create_task(start_bot())
+    loop.run_forever()
