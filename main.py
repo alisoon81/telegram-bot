@@ -1,33 +1,34 @@
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, CallbackQueryHandler, ContextTypes
-from telegram.constants import ParseMode
-from flask import Flask, request
-from threading import Thread
-import nest_asyncio
-import asyncio
 import os
 import json
 import hashlib
+import nest_asyncio
+import asyncio
+from flask import Flask, request, abort
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
+from telegram.ext import (
+    ApplicationBuilder,
+    MessageHandler,
+    CallbackQueryHandler,
+    ContextTypes,
+    filters,
+)
 
 nest_asyncio.apply()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
-
-WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
-WEBHOOK_URL = f"https://telegram-bot-xq3r.onrender.com{WEBHOOK_PATH}"
+APP_URL = "https://telegram-bot-xq3r.onrender.com"  # آدرس وبهوک شما
 
 TRANSLATION_FILE = "translations.json"
 
-# بارگذاری و ذخیره ترجمه‌ها
 def load_translations():
     if os.path.exists(TRANSLATION_FILE):
-        with open(TRANSLATION_FILE, "r") as f:
+        with open(TRANSLATION_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
 def save_translations(data):
-    with open(TRANSLATION_FILE, "w") as f:
+    with open(TRANSLATION_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False)
 
 translation_store = load_translations()
@@ -35,12 +36,11 @@ translation_store = load_translations()
 def shorten_file_id(file_id: str) -> str:
     return hashlib.md5(file_id.encode()).hexdigest()
 
-# هندل عکس‌ها
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.caption or "|" not in update.message.caption:
         await update.message.reply_text(
             "❌ لطفاً کپشن عکس رو به این صورت بنویس:\n`متن انگلیسی | ترجمه فارسی`",
-            parse_mode=ParseMode.MARKDOWN)
+            parse_mode="Markdown")
         return
 
     original, translated = map(str.strip, update.message.caption.split("|", 1))
@@ -60,7 +60,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("✅ پست در کانال منتشر شد.")
 
-# دکمه‌ها
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
@@ -78,31 +77,35 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-# ساخت اپلیکیشن تلگرام
-app = ApplicationBuilder().token(BOT_TOKEN).build()
-app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-app.add_handler(CallbackQueryHandler(button_handler))
+app = Flask(__name__)
+bot = Bot(token=BOT_TOKEN)
+application = ApplicationBuilder().bot(bot).build()
 
-# Flask
-flask_app = Flask(__name__)
+# اضافه کردن هندلرها به اپلیکیشن
+application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+application.add_handler(CallbackQueryHandler(button_handler))
 
-@flask_app.route("/")
+@app.route('/')
 def home():
     return "ربات فعاله 🚀"
 
-@flask_app.route(WEBHOOK_PATH, methods=["POST"])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), app.bot)
-    asyncio.run(app.process_update(update))
-    return "ok"
+@app.route(f'/{BOT_TOKEN}', methods=['POST'])
+def webhook_handler():
+    if request.method == "POST":
+        update = Update.de_json(request.get_json(force=True), bot)
+        asyncio.run(application.process_update(update))
+        return "ok"
+    else:
+        abort(403)
 
-def run_flask():
-    flask_app.run(host="0.0.0.0", port=8080)
-
-async def setup_webhook():
-    await app.bot.set_webhook(url=WEBHOOK_URL)
-    print(f"✅ وب‌هوک تنظیم شد روی {WEBHOOK_URL}")
+def set_webhook():
+    webhook_url = f"{APP_URL}/{BOT_TOKEN}"
+    success = bot.set_webhook(webhook_url)
+    if success:
+        print(f"Webhook set successfully to {webhook_url}")
+    else:
+        print("Failed to set webhook")
 
 if __name__ == "__main__":
-    Thread(target=run_flask).start()
-    asyncio.run(setup_webhook())
+    set_webhook()
+    app.run(host="0.0.0.0", port=8080)
