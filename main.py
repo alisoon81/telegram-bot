@@ -4,14 +4,17 @@ import hashlib
 from flask import Flask, request, Response
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
-from telegram.ext import ApplicationBuilder, ContextTypes, CallbackQueryHandler, MessageHandler, filters
+from telegram.ext import (
+    ApplicationBuilder, ContextTypes, CallbackQueryHandler,
+    MessageHandler, filters
+)
 import nest_asyncio
 import asyncio
 
 nest_asyncio.apply()
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-APP_URL = os.environ.get("APP_URL")  # مثل https://your-app-name.onrender.com
+APP_URL = os.environ.get("APP_URL")  # مثلا: https://your-app-name.onrender.com
 
 TRANSLATION_FILE = "translations.json"
 
@@ -36,7 +39,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.caption or "|" not in update.message.caption:
         await update.message.reply_text(
             "❌ لطفاً کپشن عکس رو به این صورت بنویس:\n`متن انگلیسی | ترجمه فارسی`",
-            parse_mode=ParseMode.MARKDOWN)
+            parse_mode=ParseMode.MARKDOWN
+        )
         return
 
     original, translated = map(str.strip, update.message.caption.split("|", 1))
@@ -48,15 +52,17 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_translations(translation_store)
 
     await context.bot.send_photo(
-        chat_id="@your_channel_username_or_id",  # یوزرنیم یا آی‌دی کانالت رو وارد کن
+        chat_id="@your_channel_username_or_id",  # کانال واقعی خودت رو اینجا وارد کن
         photo=file_id,
         caption=original,
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Translate", callback_data=f"translate_{short_id}")]])
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("Translate", callback_data=f"translate_{short_id}")]
+        ])
     )
 
     await update.message.reply_text("✅ پست در کانال منتشر شد.")
 
-# هندلر دکمه
+# هندلر دکمه‌ها
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
@@ -68,37 +74,36 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await query.answer()
     except Exception as e:
-        print(f"⚠️ خطا در پاسخ به دکمه: {e}")
-        try:
-            await query.answer(text="⏱ دکمه منقضی شده یا خطایی پیش اومده.", show_alert=True)
-        except:
-            pass
+        print(f"⚠️ خطا در دکمه: {e}")
+        await query.answer("⛔️ خطا هنگام نمایش ترجمه.", show_alert=True)
 
-# ساخت اپلیکیشن
+# Flask App
 app = Flask(__name__)
+
+# ساخت bot
 application = ApplicationBuilder().token(BOT_TOKEN).build()
 application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 application.add_handler(CallbackQueryHandler(button_handler))
 
-# Route تست
-@app.route('/')
-def index():
-    return "✅ ربات روی Render فعال است!"
-
-# Route دریافت آپدیت
-@app.route(f'/{BOT_TOKEN}', methods=['POST'])
-def receive_update():
-    update_data = request.get_json(force=True)
-    update = Update.de_json(update_data, application.bot)
+# Webhook route
+@app.route(f"/{BOT_TOKEN}", methods=["POST"])
+def telegram_webhook():
+    data = request.get_json(force=True)
+    update = Update.de_json(data, application.bot)
     asyncio.create_task(application.process_update(update))
     return Response("ok", status=200)
 
-# اجرای Flask و تنظیم Webhook
-if __name__ == '__main__':
-    async def setup():
+# تست route
+@app.route("/", methods=["GET"])
+def index():
+    return "ربات فعال است ✅"
+
+# شروع سرور و تنظیم webhook
+if __name__ == "__main__":
+    async def start():
         webhook_url = f"{APP_URL}/{BOT_TOKEN}"
         await application.bot.set_webhook(webhook_url)
-        print(f"✅ وب‌هوک ست شد: {webhook_url}")
+        print(f"✅ Webhook set: {webhook_url}")
         app.run(host="0.0.0.0", port=8080)
 
-    asyncio.run(setup())
+    asyncio.run(start())
