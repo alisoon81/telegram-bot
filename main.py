@@ -27,7 +27,8 @@ application.add_handler(CommandHandler("start", start))
 # تنظیم webhook بعد از اولین درخواست
 @flask_app.before_first_request
 def setup():
-    asyncio.get_event_loop().create_task(application.bot.set_webhook(WEBHOOK_URL))
+    loop = asyncio.get_event_loop()
+    loop.create_task(application.bot.set_webhook(WEBHOOK_URL))
 
 # مسیر دریافت پیام‌ها از Telegram
 @flask_app.route(WEBHOOK_PATH, methods=["POST"])
@@ -36,6 +37,7 @@ def receive_update():
     application.update_queue.put_nowait(update)
     return "ok"
 
-# اجرای سرور Flask
+# اجرای سرور Flask با پورت داینامیک
 if __name__ == "__main__":
-    flask_app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    flask_app.run(host="0.0.0.0", port=port)
