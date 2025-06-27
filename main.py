@@ -3,12 +3,9 @@ from telegram.ext import ApplicationBuilder, MessageHandler, filters, CallbackQu
 from telegram.constants import ParseMode
 from flask import Flask
 from threading import Thread
-import nest_asyncio
 import asyncio
 import os
 import json
-
-nest_asyncio.apply()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
@@ -38,13 +35,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo[-1]
     file_id = photo.file_id
 
-    sent_msg = await context.bot.send_photo(
+    await context.bot.send_photo(
         chat_id=CHANNEL_ID,
         photo=file_id,
         caption=original,
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("Translate", callback_data=f"translate_{file_id}")
-        ]])
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Translate", callback_data=f"translate_{file_id}")]])
     )
 
     translation_store[file_id] = translated
@@ -82,9 +77,9 @@ flask_app = Flask('')
 def home():
     return "ربات فعاله 🚀"
 
-def run():
+def run_flask():
     flask_app.run(host="0.0.0.0", port=8080)
 
 if __name__ == "__main__":
-    Thread(target=run).start()
+    Thread(target=run_flask).start()
     asyncio.run(start_bot())
