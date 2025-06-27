@@ -24,12 +24,11 @@ def load_translations():
 
 def save_translations(data):
     with open(TRANSLATION_FILE, "w") as f:
-        json.dump(data, f)
+        json.dump(data, f, ensure_ascii=False)
 
 translation_store = load_translations()
 
 def shorten_file_id(file_id: str) -> str:
-    # هش MD5 از file_id می‌سازیم که 32 کاراکتر هست
     return hashlib.md5(file_id.encode()).hexdigest()
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -47,7 +46,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     translation_store[short_id] = translated
     save_translations(translation_store)
 
-    sent_msg = await context.bot.send_photo(
+    await context.bot.send_photo(
         chat_id=CHANNEL_ID,
         photo=file_id,
         caption=original,
@@ -93,4 +92,5 @@ def run():
 
 if __name__ == "__main__":
     Thread(target=run).start()
-    asyncio.run(start_bot())
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(start_bot())
