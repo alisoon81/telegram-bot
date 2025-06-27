@@ -7,6 +7,7 @@ import nest_asyncio
 import asyncio
 import os
 import json
+import hashlib
 
 nest_asyncio.apply()
 
@@ -27,6 +28,10 @@ def save_translations(data):
 
 translation_store = load_translations()
 
+def shorten_file_id(file_id: str) -> str:
+    # هش MD5 از file_id می‌سازیم که 32 کاراکتر هست
+    return hashlib.md5(file_id.encode()).hexdigest()
+
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.caption or "|" not in update.message.caption:
         await update.message.reply_text(
@@ -38,15 +43,18 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo[-1]
     file_id = photo.file_id
 
+    short_id = shorten_file_id(file_id)
+    translation_store[short_id] = translated
+    save_translations(translation_store)
+
     sent_msg = await context.bot.send_photo(
         chat_id=CHANNEL_ID,
         photo=file_id,
         caption=original,
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Translate", callback_data=f"translate_{file_id}")]])
+        reply_markup=InlineKeyboardMarkup([[
+            InlineKeyboardButton("Translate", callback_data=f"translate_{short_id}")
+        ]])
     )
-
-    translation_store[file_id] = translated
-    save_translations(translation_store)
 
     await update.message.reply_text("✅ پست در کانال منتشر شد.")
 
@@ -55,8 +63,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     try:
         if data.startswith("translate_"):
-            file_id = data.split("_", 1)[1]
-            translation = translation_store.get(file_id, "❌ ترجمه‌ای یافت نشد.")
+            short_id = data.split("_", 1)[1]
+            translation = translation_store.get(short_id, "❌ ترجمه‌ای یافت نشد.")
             await query.answer(text=translation, show_alert=True)
         else:
             await query.answer()
@@ -85,6 +93,4 @@ def run():
 
 if __name__ == "__main__":
     Thread(target=run).start()
-    loop = asyncio.get_event_loop()
-    loop.create_task(start_bot())
-    loop.run_forever()
+    asyncio.run(start_bot())
