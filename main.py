@@ -35,7 +35,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     photo = update.message.photo[-1]
     file_id = photo.file_id
 
-    await context.bot.send_photo(
+    sent_msg = await context.bot.send_photo(
         chat_id=CHANNEL_ID,
         photo=file_id,
         caption=original,
@@ -82,4 +82,4 @@ def run_flask():
 
 if __name__ == "__main__":
     Thread(target=run_flask).start()
-    asyncio.run(start_bot())
+    asyncio.get_event_loop().run_until_complete(start_bot())
