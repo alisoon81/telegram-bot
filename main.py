@@ -8,7 +8,7 @@ import asyncio
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
-APP_URL = os.getenv("APP_URL")  # آدرس عمومی که وبهوک رو روش ست می‌کنی
+APP_URL = os.getenv("https://telegram-bot-xq3r.onrender.com")  # آدرس عمومی که وبهوک رو روش ست می‌کنی
 
 TRANSLATION_FILE = "translations.json"
 
