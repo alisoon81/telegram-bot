@@ -18,7 +18,6 @@ APP_URL = os.environ.get("APP_URL")  # مثلا: https://your-app-name.onrender.
 
 TRANSLATION_FILE = "translations.json"
 
-# بارگذاری ترجمه‌ها
 def load_translations():
     if os.path.exists(TRANSLATION_FILE):
         with open(TRANSLATION_FILE, "r", encoding="utf-8") as f:
@@ -34,7 +33,6 @@ translation_store = load_translations()
 def shorten_file_id(file_id: str) -> str:
     return hashlib.md5(file_id.encode()).hexdigest()
 
-# هندلر عکس
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.caption or "|" not in update.message.caption:
         await update.message.reply_text(
@@ -52,7 +50,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_translations(translation_store)
 
     await context.bot.send_photo(
-        chat_id="@your_channel_username_or_id",  # کانال واقعی خودت رو اینجا وارد کن
+        chat_id="@your_channel_username_or_id",  # اینجا آیدی کانالتو بذار مثل @infooode
         photo=file_id,
         caption=original,
         reply_markup=InlineKeyboardMarkup([
@@ -62,7 +60,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("✅ پست در کانال منتشر شد.")
 
-# هندلر دکمه‌ها
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
@@ -77,15 +74,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"⚠️ خطا در دکمه: {e}")
         await query.answer("⛔️ خطا هنگام نمایش ترجمه.", show_alert=True)
 
-# Flask App
 app = Flask(__name__)
 
-# ساخت bot
 application = ApplicationBuilder().token(BOT_TOKEN).build()
 application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 application.add_handler(CallbackQueryHandler(button_handler))
 
-# Webhook route
 @app.route(f"/{BOT_TOKEN}", methods=["POST"])
 def telegram_webhook():
     data = request.get_json(force=True)
@@ -93,12 +87,10 @@ def telegram_webhook():
     asyncio.create_task(application.process_update(update))
     return Response("ok", status=200)
 
-# تست route
 @app.route("/", methods=["GET"])
 def index():
     return "ربات فعال است ✅"
 
-# شروع سرور و تنظیم webhook
 if __name__ == "__main__":
     async def start():
         webhook_url = f"{APP_URL}/{BOT_TOKEN}"
