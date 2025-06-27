@@ -1,7 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 from telegram.constants import ParseMode
-from flask import Flask
+from flask import Flask, request
 from threading import Thread
 import nest_asyncio
 import asyncio
@@ -14,8 +14,12 @@ nest_asyncio.apply()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = int(os.getenv("CHANNEL_ID"))
 
+WEBHOOK_PATH = f"/webhook/{BOT_TOKEN}"
+WEBHOOK_URL = f"https://telegram-bot-xq3r.onrender.com{WEBHOOK_PATH}"
+
 TRANSLATION_FILE = "translations.json"
 
+# بارگذاری و ذخیره ترجمه‌ها
 def load_translations():
     if os.path.exists(TRANSLATION_FILE):
         with open(TRANSLATION_FILE, "r") as f:
@@ -31,6 +35,7 @@ translation_store = load_translations()
 def shorten_file_id(file_id: str) -> str:
     return hashlib.md5(file_id.encode()).hexdigest()
 
+# هندل عکس‌ها
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.caption or "|" not in update.message.caption:
         await update.message.reply_text(
@@ -50,13 +55,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id=CHANNEL_ID,
         photo=file_id,
         caption=original,
-        reply_markup=InlineKeyboardMarkup([[
-            InlineKeyboardButton("Translate", callback_data=f"translate_{short_id}")
-        ]])
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Translate", callback_data=f"translate_{short_id}")]])
     )
 
     await update.message.reply_text("✅ پست در کانال منتشر شد.")
 
+# دکمه‌ها
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     data = query.data
@@ -74,23 +78,31 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-async def start_bot():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    app.add_handler(CallbackQueryHandler(button_handler))
-    print("✅ ربات آماده اجراست...")
-    await app.run_polling()
+# ساخت اپلیکیشن تلگرام
+app = ApplicationBuilder().token(BOT_TOKEN).build()
+app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+app.add_handler(CallbackQueryHandler(button_handler))
 
-flask_app = Flask('')
+# Flask
+flask_app = Flask(__name__)
 
-@flask_app.route('/')
+@flask_app.route("/")
 def home():
     return "ربات فعاله 🚀"
 
-def run():
+@flask_app.route(WEBHOOK_PATH, methods=["POST"])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), app.bot)
+    asyncio.run(app.process_update(update))
+    return "ok"
+
+def run_flask():
     flask_app.run(host="0.0.0.0", port=8080)
 
+async def setup_webhook():
+    await app.bot.set_webhook(url=WEBHOOK_URL)
+    print(f"✅ وب‌هوک تنظیم شد روی {WEBHOOK_URL}")
+
 if __name__ == "__main__":
-    Thread(target=run).start()
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(start_bot())
+    Thread(target=run_flask).start()
+    asyncio.run(setup_webhook())
