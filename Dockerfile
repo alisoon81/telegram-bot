@@ -1,17 +1,17 @@
-# پایه تصویر پایتون 3.11 slim (کم حجم و مناسب)
+# از ایمیج رسمی پایتون استفاده کن
 FROM python:3.11-slim
 
-# دایرکتوری کاری داخل کانتینر
+# محل کار داخل کانتینر
 WORKDIR /app
 
-# کپی فایل requirements.txt به دایرکتوری کاری
-COPY requirements.txt .
-
-# نصب پکیج‌ها بدون کش برای صرفه‌جویی در حجم
-RUN pip install --no-cache-dir -r requirements.txt
-
-# کپی کل کد پروژه به دایرکتوری کاری
+# فایل‌های پروژه رو کپی کن
 COPY . .
 
-# فرمان شروع اجرای ربات
+# نصب وابستگی‌ها
+RUN pip install --no-cache-dir -r requirements.txt
+
+# پورت مورد استفاده (برای Flask مثلاً 8080)
+EXPOSE 8080
+
+# اجرای ربات
 CMD ["python", "main.py"]
