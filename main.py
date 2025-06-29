@@ -77,10 +77,13 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 if __name__ == "__main__":
-    keep_alive()  # این رو اضافه کنید تا Glitch بیدار بمونه
+    keep_alive()  # برای جلوگیری از خواب رفتن سرور (اگه لازم داری)
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CallbackQueryHandler(button_handler))
 
     print("✅ ربات آماده اجراست...")
+
+    # این خط مهمه، بدون این ربات پیام‌ها رو گوش نمیده
+    app.run_polling()
