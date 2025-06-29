@@ -1,7 +1,7 @@
 import json
 import os
 from keep_alive import keep_alive  # این رو اضافه کنید
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 from telegram.constants import ParseMode
 
@@ -77,6 +77,10 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 if __name__ == "__main__":
+    bot = Bot(BOT_TOKEN)
+    bot.delete_webhook()
+    print("Webhook deleted")
+
     keep_alive()  # برای جلوگیری از خواب رفتن سرور (اگه لازم داری)
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -85,5 +89,4 @@ if __name__ == "__main__":
 
     print("✅ ربات آماده اجراست...")
 
-    # این خط مهمه، بدون این ربات پیام‌ها رو گوش نمیده
     app.run_polling()
