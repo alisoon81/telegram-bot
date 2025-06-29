@@ -1,43 +1,86 @@
-from flask import Flask, request
-from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+import json
 import os
-import asyncio
-import nest_asyncio
+from keep_alive import keep_alive  # این رو اضافه کنید
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, CallbackQueryHandler, ContextTypes
+from telegram.constants import ParseMode
 
-nest_asyncio.apply()
+BOT_TOKEN = "7045011878:AAFxYZtoUV7_-7x8uxYbx1lwEyBgW2oAUf0"
+CHANNEL_ID = -1002443008163  # آیدی عددی کانال
+TRANSLATION_FILE = "translations.json"
 
-# گرفتن توکن از محیط
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-WEBHOOK_PATH = "/webhook"
-WEBHOOK_URL = f"https://telegram-bot-xq3r.onrender.com{WEBHOOK_PATH}"
+def load_translations():
+    if not os.path.exists(TRANSLATION_FILE):
+        return {}
+    with open(TRANSLATION_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-# Flask app
-flask_app = Flask(__name__)
+def save_translations(data):
+    with open(TRANSLATION_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
 
-# ایجاد ربات
-application = ApplicationBuilder().token(BOT_TOKEN).build()
+translation_store = load_translations()
 
-# هندلر دستور /start
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("سلام! من با موفقیت راه‌اندازی شدم.")
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message.caption or "|" not in update.message.caption:
+        await update.message.reply_text(
+            "❌ لطفاً کپشن عکس رو به این صورت بنویس:\n`متن انگلیسی | ترجمه فارسی`",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
 
-application.add_handler(CommandHandler("start", start))
+    original, translated = map(str.strip, update.message.caption.split("|", 1))
 
-# تنظیم webhook بعد از اولین درخواست
-@flask_app.before_first_request
-def setup():
-    loop = asyncio.get_event_loop()
-    loop.create_task(application.bot.set_webhook(WEBHOOK_URL))
+    keyboard = [
+        [InlineKeyboardButton("Translate", callback_data="translate|pending")]
+    ]
 
-# مسیر دریافت پیام‌ها از Telegram
-@flask_app.route(WEBHOOK_PATH, methods=["POST"])
-def receive_update():
-    update = Update.de_json(request.get_json(force=True), application.bot)
-    application.update_queue.put_nowait(update)
-    return "ok"
+    photo = update.message.photo[-1]
+    file_id = photo.file_id
 
-# اجرای سرور Flask با پورت داینامیک
+    sent_msg = await context.bot.send_photo(
+        chat_id=CHANNEL_ID,
+        photo=file_id,
+        caption=original,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+    msg_id = str(sent_msg.message_id)
+
+    translation_store[msg_id] = translated
+    save_translations(translation_store)
+
+    new_keyboard = [
+        [InlineKeyboardButton("Translate", callback_data=f"translate|{msg_id}")]
+    ]
+    await sent_msg.edit_reply_markup(reply_markup=InlineKeyboardMarkup(new_keyboard))
+
+    await update.message.reply_text("✅ پست در کانال منتشر شد.")
+
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    try:
+        query_data = query.data
+        if not query_data.startswith("translate|"):
+            await query.answer("❌ درخواست نامعتبر بود.", show_alert=True)
+            return
+
+        _, msg_id = query_data.split("|", 1)
+        translation = translation_store.get(msg_id, "❌ ترجمه‌ای یافت نشد.")
+        await query.answer(text=translation, show_alert=True)
+
+    except Exception as e:
+        print(f"⚠️ خطا در پاسخ به دکمه: {e}")
+        try:
+            await query.answer(text="⏱ دکمه منقضی شده یا خطایی پیش اومده.", show_alert=True)
+        except:
+            pass
+
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    flask_app.run(host="0.0.0.0", port=port)
+    keep_alive()  # این رو اضافه کنید تا Glitch بیدار بمونه
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(CallbackQueryHandler(button_handler))
+
+    print("✅ ربات آماده اجراست...")
