@@ -1,5 +1,4 @@
 import asyncpg
-import asyncio
 
 DATABASE_URL = "postgresql://neondb_owner:npg_gtFu06zhUKJj@ep-mute-hill-afp0p6oi-pooler.c-2.us-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
