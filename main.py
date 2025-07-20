@@ -66,20 +66,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-if __name__ == "__main__":
-    bot = Bot(BOT_TOKEN)
-    bot.delete_webhook()
-    print("Webhook deleted")
+async def main():
+    await db.connect()
 
-    keep_alive()  # برای جلوگیری از خواب رفتن سرور (اگه لازم داری)
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-    # اتصال به دیتابیس به صورت async
-    asyncio.run(db.connect())
-
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CallbackQueryHandler(button_handler))
 
     print("✅ ربات آماده اجراست...")
+    await app.run_polling()
 
-    app.run_polling()
+if __name__ == "__main__":
+    keep_alive()
+    asyncio.run(main())
