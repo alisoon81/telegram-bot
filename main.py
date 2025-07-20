@@ -1,25 +1,13 @@
-import json
 import os
 from keep_alive import keep_alive  # این رو اضافه کنید
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import ApplicationBuilder, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 from telegram.constants import ParseMode
+import asyncio
+from db_postgres import db
 
 BOT_TOKEN = "7045011878:AAFxYZtoUV7_-7x8uxYbx1lwEyBgW2oAUf0"
 CHANNEL_ID = -1002443008163  # آیدی عددی کانال
-TRANSLATION_FILE = "translations.json"
-
-def load_translations():
-    if not os.path.exists(TRANSLATION_FILE):
-        return {}
-    with open(TRANSLATION_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
-
-def save_translations(data):
-    with open(TRANSLATION_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-translation_store = load_translations()
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.caption or "|" not in update.message.caption:
@@ -47,8 +35,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg_id = str(sent_msg.message_id)
 
-    translation_store[msg_id] = translated
-    save_translations(translation_store)
+    # ذخیره ترجمه در دیتابیس
+    await db.save_translation(msg_id, translated)
 
     new_keyboard = [
         [InlineKeyboardButton("Translate", callback_data=f"translate|{msg_id}")]
@@ -66,7 +54,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         _, msg_id = query_data.split("|", 1)
-        translation = translation_store.get(msg_id, "❌ ترجمه‌ای یافت نشد.")
+        translation = await db.get_translation(msg_id)
+        if not translation:
+            translation = "❌ ترجمه‌ای یافت نشد."
         await query.answer(text=translation, show_alert=True)
 
     except Exception as e:
@@ -83,6 +73,9 @@ if __name__ == "__main__":
 
     keep_alive()  # برای جلوگیری از خواب رفتن سرور (اگه لازم داری)
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # اتصال به دیتابیس به صورت async
+    asyncio.run(db.connect())
 
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(CallbackQueryHandler(button_handler))
