@@ -6,7 +6,7 @@ import asyncio
 from db_postgres import db
 from keep_alive import keep_alive
 
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "7045011878:AAFxYZtoUV7_-7x8uxYbx1lwEyBgW2oAUf0")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "7045011878:AAFmzL1V5UK1kxWeAUKHyDkSA9KB2ek-JaU")
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID", "-1002443008163"))
 
 
