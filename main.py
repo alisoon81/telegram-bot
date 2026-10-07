@@ -3,60 +3,43 @@ import asyncio
 import nest_asyncio
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-ApplicationBuilder,
-MessageHandler,
-filters,
-CallbackQueryHandler,
-ContextTypes,
-)
+from telegram.ext import ApplicationBuilder, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 from telegram.constants import ParseMode
 
 from db_postgres import db
 from keep_alive import keep_alive
 
 BOT_TOKEN = os.environ["BOT_TOKEN"]
-
-CHANNEL_ID = int(
-os.environ.get("CHANNEL_ID", "-1002443008163")
-)
-
+CHANNEL_ID = int(os.environ.get("CHANNEL_ID", "-1002443008163"))
 ADMIN_USER_ID = 7301301416
 
 def is_authorized(update: Update) -> bool:
-if not update.effective_user:
-return False
+return (
+update.effective_user is not None
+and update.effective_user.id == ADMIN_USER_ID
+)
 
-```
-return update.effective_user.id == ADMIN_USER_ID
-```
-
-async def handle_photo(
-update: Update,
-context: ContextTypes.DEFAULT_TYPE
-):
-if not update.message:
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+if update.message is None:
 return
 
-```
 if not is_authorized(update):
     await update.message.reply_text(
         "⛔ شما اجازه استفاده از این ربات را ندارید."
     )
     return
 
-if not update.message.caption or "|" not in update.message.caption:
+caption = update.message.caption
+
+if not caption or "|" not in caption:
     await update.message.reply_text(
-        "❌ لطفاً کپشن عکس را به این صورت بنویس:\n\n"
+        "❌ لطفاً کپشن عکس را این‌طور بنویس:\n\n"
         "متن انگلیسی | ترجمه فارسی",
         parse_mode=ParseMode.MARKDOWN
     )
     return
 
-original, translated = map(
-    str.strip,
-    update.message.caption.split("|", 1)
-)
+original, translated = map(str.strip, caption.split("|", 1))
 
 if not original or not translated:
     await update.message.reply_text(
@@ -64,22 +47,24 @@ if not original or not translated:
     )
     return
 
-keyboard = [[
-    InlineKeyboardButton(
-        "Translate",
-        callback_data="translate|pending"
-    )
-]]
-
-photo = update.message.photo[-1]
-file_id = photo.file_id
-
 try:
+    photo = update.message.photo[-1]
+    file_id = photo.file_id
+
+    temporary_keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "Translate",
+                callback_data="translate|pending"
+            )
+        ]
+    ])
+
     sent_msg = await context.bot.send_photo(
         chat_id=CHANNEL_ID,
         photo=file_id,
         caption=original,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=temporary_keyboard
     )
 
     msg_id = str(sent_msg.message_id)
@@ -89,15 +74,17 @@ try:
         translated
     )
 
-    new_keyboard = [[
-        InlineKeyboardButton(
-            "Translate",
-            callback_data=f"translate|{msg_id}"
-        )
-    ]]
+    final_keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                "Translate",
+                callback_data=f"translate|{msg_id}"
+            )
+        ]
+    ])
 
     await sent_msg.edit_reply_markup(
-        reply_markup=InlineKeyboardMarkup(new_keyboard)
+        reply_markup=final_keyboard
     )
 
     await update.message.reply_text(
@@ -110,20 +97,27 @@ except Exception as e:
     await update.message.reply_text(
         "❌ هنگام انتشار پست خطایی رخ داد."
     )
-```
 
-async def button_handler(
-update: Update,
-context: ContextTypes.DEFAULT_TYPE
-):
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 query = update.callback_query
 
-```
+if query is None:
+    return
+
 try:
-    if not query or not query.data:
+    if not query.data:
         return
 
-    _, msg_id = query.data.split("|", 1)
+    parts = query.data.split("|", 1)
+
+    if len(parts) != 2:
+        await query.answer(
+            "❌ اطلاعات دکمه نامعتبر است.",
+            show_alert=True
+        )
+        return
+
+    _, msg_id = parts
 
     translation = await db.get_translation(msg_id)
 
@@ -140,22 +134,16 @@ except Exception as e:
 
     try:
         await query.answer(
-            text="⏱ دکمه منقضی شده یا خطایی پیش آمده.",
+            text="⏱ خطایی در دریافت ترجمه رخ داد.",
             show_alert=True
         )
     except Exception:
         pass
-```
 
 async def main():
 await db.connect()
 
-```
-app = (
-    ApplicationBuilder()
-    .token(BOT_TOKEN)
-    .build()
-)
+app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 app.add_handler(
     MessageHandler(
@@ -172,18 +160,11 @@ app.add_handler(
 
 print("✅ ربات آماده اجراست...")
 
-await app.run_polling(
-    close_loop=False
-)
-```
+await app.run_polling(close_loop=False)
 
-if **name** == "**main**":
+if name == "main":
 keep_alive()
 
-```
 nest_asyncio.apply()
 
-asyncio.get_event_loop().run_until_complete(
-    main()
-)
-```
+asyncio.get_event_loop().run_until_complete(main())
