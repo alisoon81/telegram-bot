@@ -13,20 +13,16 @@ BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHANNEL_ID = int(os.environ.get("CHANNEL_ID", "-1002443008163"))
 ADMIN_USER_ID = 7301301416
 
-def is_authorized(update: Update) -> bool:
-return (
-update.effective_user is not None
-and update.effective_user.id == ADMIN_USER_ID
-)
-
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-if update.message is None:
-return
 
-if not is_authorized(update):
-    await update.message.reply_text(
-        "⛔ شما اجازه استفاده از این ربات را ندارید."
-    )
+if update.message is None:
+    return
+
+if update.effective_user is None:
+    return
+
+if update.effective_user.id != ADMIN_USER_ID:
+    await update.message.reply_text("⛔ شما اجازه استفاده از این ربات را ندارید.")
     return
 
 caption = update.message.caption
@@ -39,7 +35,10 @@ if not caption or "|" not in caption:
     )
     return
 
-original, translated = map(str.strip, caption.split("|", 1))
+original, translated = caption.split("|", 1)
+
+original = original.strip()
+translated = translated.strip()
 
 if not original or not translated:
     await update.message.reply_text(
@@ -48,23 +47,26 @@ if not original or not translated:
     return
 
 try:
+
     photo = update.message.photo[-1]
     file_id = photo.file_id
 
-    temporary_keyboard = InlineKeyboardMarkup([
+    keyboard = InlineKeyboardMarkup(
         [
-            InlineKeyboardButton(
-                "Translate",
-                callback_data="translate|pending"
-            )
+            [
+                InlineKeyboardButton(
+                    "Translate",
+                    callback_data="translate|pending"
+                )
+            ]
         ]
-    ])
+    )
 
     sent_msg = await context.bot.send_photo(
         chat_id=CHANNEL_ID,
         photo=file_id,
         caption=original,
-        reply_markup=temporary_keyboard
+        reply_markup=keyboard
     )
 
     msg_id = str(sent_msg.message_id)
@@ -74,17 +76,19 @@ try:
         translated
     )
 
-    final_keyboard = InlineKeyboardMarkup([
+    new_keyboard = InlineKeyboardMarkup(
         [
-            InlineKeyboardButton(
-                "Translate",
-                callback_data=f"translate|{msg_id}"
-            )
+            [
+                InlineKeyboardButton(
+                    "Translate",
+                    callback_data=f"translate|{msg_id}"
+                )
+            ]
         ]
-    ])
+    )
 
     await sent_msg.edit_reply_markup(
-        reply_markup=final_keyboard
+        reply_markup=new_keyboard
     )
 
     await update.message.reply_text(
@@ -92,6 +96,7 @@ try:
     )
 
 except Exception as e:
+
     print(f"❌ خطا هنگام انتشار پست: {e}")
 
     await update.message.reply_text(
@@ -99,12 +104,14 @@ except Exception as e:
     )
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
 query = update.callback_query
 
 if query is None:
     return
 
 try:
+
     if not query.data:
         return
 
@@ -117,7 +124,7 @@ try:
         )
         return
 
-    _, msg_id = parts
+    msg_id = parts[1]
 
     translation = await db.get_translation(msg_id)
 
@@ -130,17 +137,21 @@ try:
     )
 
 except Exception as e:
+
     print(f"⚠️ خطا در پاسخ به دکمه: {e}")
 
     try:
+
         await query.answer(
             text="⏱ خطایی در دریافت ترجمه رخ داد.",
             show_alert=True
         )
+
     except Exception:
         pass
 
 async def main():
+
 await db.connect()
 
 app = ApplicationBuilder().token(BOT_TOKEN).build()
@@ -160,11 +171,16 @@ app.add_handler(
 
 print("✅ ربات آماده اجراست...")
 
-await app.run_polling(close_loop=False)
+await app.run_polling(
+    close_loop=False
+)
 
 if name == "main":
+
 keep_alive()
 
 nest_asyncio.apply()
 
-asyncio.get_event_loop().run_until_complete(main())
+asyncio.get_event_loop().run_until_complete(
+    main()
+)
