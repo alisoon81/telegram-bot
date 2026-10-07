@@ -1,94 +1,80 @@
-```python
 import os
 import asyncio
 import nest_asyncio
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    ApplicationBuilder,
-    MessageHandler,
-    filters,
-    CallbackQueryHandler,
-    ContextTypes,
+ApplicationBuilder,
+MessageHandler,
+filters,
+CallbackQueryHandler,
+ContextTypes,
 )
 from telegram.constants import ParseMode
 
 from db_postgres import db
 from keep_alive import keep_alive
 
-
-# =========================
-# تنظیمات
-# =========================
-
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 
 CHANNEL_ID = int(
-    os.environ.get("CHANNEL_ID", "-1002443008163")
+os.environ.get("CHANNEL_ID", "-1002443008163")
 )
 
-# فقط این کاربر اجازه انتشار پست دارد
 ADMIN_USER_ID = 7301301416
 
-
-# =========================
-# بررسی دسترسی
-# =========================
-
 def is_authorized(update: Update) -> bool:
-    if not update.effective_user:
-        return False
+if not update.effective_user:
+return False
 
-    return update.effective_user.id == ADMIN_USER_ID
-
-
-# =========================
-# دریافت عکس و انتشار
-# =========================
+```
+return update.effective_user.id == ADMIN_USER_ID
+```
 
 async def handle_photo(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
+update: Update,
+context: ContextTypes.DEFAULT_TYPE
 ):
-    # فقط کاربر مجاز
-    if not is_authorized(update):
-        await update.message.reply_text(
-            "⛔ شما اجازه استفاده از این ربات را ندارید."
-        )
-        return
+if not update.message:
+return
 
-    # بررسی کپشن
-    if not update.message.caption or "|" not in update.message.caption:
-        await update.message.reply_text(
-            "❌ لطفاً کپشن عکس را به این صورت بنویس:\n\n"
-            "متن انگلیسی | ترجمه فارسی",
-            parse_mode=ParseMode.MARKDOWN
-        )
-        return
-
-    original, translated = map(
-        str.strip,
-        update.message.caption.split("|", 1)
+```
+if not is_authorized(update):
+    await update.message.reply_text(
+        "⛔ شما اجازه استفاده از این ربات را ندارید."
     )
+    return
 
-    if not original or not translated:
-        await update.message.reply_text(
-            "❌ متن انگلیسی و ترجمه فارسی نمی‌توانند خالی باشند."
-        )
-        return
+if not update.message.caption or "|" not in update.message.caption:
+    await update.message.reply_text(
+        "❌ لطفاً کپشن عکس را به این صورت بنویس:\n\n"
+        "متن انگلیسی | ترجمه فارسی",
+        parse_mode=ParseMode.MARKDOWN
+    )
+    return
 
-    # دکمه موقت
-    keyboard = [[
-        InlineKeyboardButton(
-            "Translate",
-            callback_data="translate|pending"
-        )
-    ]]
+original, translated = map(
+    str.strip,
+    update.message.caption.split("|", 1)
+)
 
-    photo = update.message.photo[-1]
-    file_id = photo.file_id
+if not original or not translated:
+    await update.message.reply_text(
+        "❌ متن انگلیسی و ترجمه فارسی نمی‌توانند خالی باشند."
+    )
+    return
 
-    # ارسال به کانال
+keyboard = [[
+    InlineKeyboardButton(
+        "Translate",
+        callback_data="translate|pending"
+    )
+]]
+
+photo = update.message.photo[-1]
+file_id = photo.file_id
+
+try:
     sent_msg = await context.bot.send_photo(
         chat_id=CHANNEL_ID,
         photo=file_id,
@@ -98,13 +84,11 @@ async def handle_photo(
 
     msg_id = str(sent_msg.message_id)
 
-    # ذخیره ترجمه
     await db.save_translation(
         msg_id,
         translated
     )
 
-    # دکمه نهایی
     new_keyboard = [[
         InlineKeyboardButton(
             "Translate",
@@ -120,89 +104,86 @@ async def handle_photo(
         "✅ پست با موفقیت در کانال منتشر شد."
     )
 
+except Exception as e:
+    print(f"❌ خطا هنگام انتشار پست: {e}")
 
-# =========================
-# دکمه Translate
-# =========================
+    await update.message.reply_text(
+        "❌ هنگام انتشار پست خطایی رخ داد."
+    )
+```
 
 async def button_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
+update: Update,
+context: ContextTypes.DEFAULT_TYPE
 ):
-    query = update.callback_query
+query = update.callback_query
+
+```
+try:
+    if not query or not query.data:
+        return
+
+    _, msg_id = query.data.split("|", 1)
+
+    translation = await db.get_translation(msg_id)
+
+    if not translation:
+        translation = "❌ ترجمه‌ای یافت نشد."
+
+    await query.answer(
+        text=translation,
+        show_alert=True
+    )
+
+except Exception as e:
+    print(f"⚠️ خطا در پاسخ به دکمه: {e}")
 
     try:
-        _, msg_id = query.data.split("|", 1)
-
-        translation = await db.get_translation(msg_id)
-
-        if not translation:
-            translation = "❌ ترجمه‌ای یافت نشد."
-
         await query.answer(
-            text=translation,
+            text="⏱ دکمه منقضی شده یا خطایی پیش آمده.",
             show_alert=True
         )
-
-    except Exception as e:
-        print(
-            f"⚠️ خطا در پاسخ به دکمه: {e}"
-        )
-
-        try:
-            await query.answer(
-                text="⏱ دکمه منقضی شده یا خطایی پیش آمده.",
-                show_alert=True
-            )
-        except Exception:
-            pass
-
-
-# =========================
-# اجرای ربات
-# =========================
+    except Exception:
+        pass
+```
 
 async def main():
-    await db.connect()
+await db.connect()
 
-    app = (
-        ApplicationBuilder()
-        .token(BOT_TOKEN)
-        .build()
+```
+app = (
+    ApplicationBuilder()
+    .token(BOT_TOKEN)
+    .build()
+)
+
+app.add_handler(
+    MessageHandler(
+        filters.PHOTO,
+        handle_photo
     )
+)
 
-    # فقط عکس‌ها
-    app.add_handler(
-        MessageHandler(
-            filters.PHOTO,
-            handle_photo
-        )
+app.add_handler(
+    CallbackQueryHandler(
+        button_handler
     )
+)
 
-    # دکمه Translate
-    app.add_handler(
-        CallbackQueryHandler(
-            button_handler
-        )
-    )
+print("✅ ربات آماده اجراست...")
 
-    print("✅ ربات آماده اجراست...")
+await app.run_polling(
+    close_loop=False
+)
+```
 
-    await app.run_polling(
-        close_loop=False
-    )
+if **name** == "**main**":
+keep_alive()
 
+```
+nest_asyncio.apply()
 
-# =========================
-# شروع
-# =========================
-
-if __name__ == "__main__":
-    keep_alive()
-
-    nest_asyncio.apply()
-
-    asyncio.get_event_loop().run_until_complete(
-        main()
-    )
+asyncio.get_event_loop().run_until_complete(
+    main()
+)
 ```
